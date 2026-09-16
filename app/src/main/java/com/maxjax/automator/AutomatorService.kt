@@ -58,6 +58,7 @@ class AutomatorService : AccessibilityService() {
     private var replyPanel: View? = null
     private var confirmPanel: View? = null
 
+    private var statusFlashUntil = 0L
     private var dragStartX = 0
     private var dragStartY = 0
     private var touchStartX = 0f
@@ -357,12 +358,15 @@ class AutomatorService : AccessibilityService() {
 
     private fun quote(s: String): String = s.replace("\n", "\\n").take(60)
 
-    /** Writes everything on screen to the log so selectors can be picked without guessing. */
-    fun dumpScreen() {
+    /**
+     * Writes everything on screen to the log so selectors can be picked without guessing.
+     * Returns the number of items written, or -1 when the screen can't be read at all.
+     */
+    fun dumpScreen(): Int {
         val roots = appRoots()
         if (roots.isEmpty()) {
             AppLog.i("dump: nothing readable on screen")
-            return
+            return -1
         }
         val rows = ArrayList<String>()
         for (root in roots) {
@@ -373,8 +377,11 @@ class AutomatorService : AccessibilityService() {
                 val text = n.text?.toString() ?: ""
                 val desc = n.contentDescription?.toString() ?: ""
                 val id = n.viewIdResourceName ?: ""
-                val interesting = text.isNotBlank() || desc.isNotBlank() ||
-                    (id.isNotBlank() && (n.isClickable || n.isLongClickable || n.isEditable))
+                // An unlabelled clickable is still worth listing: it can't be matched by a
+                // selector, so its bounds are the only way to reach it.
+                val interactive = n.isClickable || n.isLongClickable || n.isEditable
+                val interesting = text.isNotBlank() || desc.isNotBlank() || interactive ||
+                    (id.isNotBlank() && n.isScrollable)
                 if (!interesting) continue
                 val r = bounds(n)
                 val sb = StringBuilder()
@@ -386,6 +393,9 @@ class AutomatorService : AccessibilityService() {
                 if (text.isNotBlank()) sb.append("  text=\"${quote(text)}\"")
                 if (desc.isNotBlank()) sb.append("  desc=\"${quote(desc)}\"")
                 if (id.isNotBlank()) sb.append("  id=\"${id.substringAfter(":id/")}\"")
+                if (text.isBlank() && desc.isBlank() && id.isBlank()) {
+                    sb.append("  (no label - tap it by position)")
+                }
                 rows.add(sb.toString())
                 if (rows.size >= DUMP_LIMIT) break
             }
@@ -397,6 +407,7 @@ class AutomatorService : AccessibilityService() {
         rows.forEachIndexed { i, row -> AppLog.i("  $i  $row") }
         if (rows.size >= DUMP_LIMIT) AppLog.i("  … stopped at $DUMP_LIMIT items")
         AppLog.i("── end dump")
+        return rows.size
     }
 
     // ---------------------------------------------------------------- text input
@@ -513,8 +524,8 @@ class AutomatorService : AccessibilityService() {
         val chat = barIcon(Icon.CHAT, Palette.TEXT) { toggleReplyPanel() }
         val look = barIcon(Icon.SEARCH, Palette.TEXT) {
             closePanels()
-            dumpScreen()
-            toast("Screen written to Logs")
+            val n = dumpScreen()
+            flashStatus(if (n < 0) "Can't read screen" else "$n items logged")
         }
         val close = barIcon(Icon.CLOSE, Palette.DANGER) { askShutdown() }
 
@@ -597,13 +608,22 @@ class AutomatorService : AccessibilityService() {
         updateBubble()
     }
 
+    /** Briefly shows a result in the bar. Toasts are unreliable over a fullscreen app. */
+    private fun flashStatus(msg: String) {
+        statusFlashUntil = System.currentTimeMillis() + 2500
+        statusView?.text = msg
+        main.postDelayed({ updateBubble() }, 2600)
+    }
+
     private fun updateBubble() {
         val r = runner
         val paused = running && r != null && r.paused
-        statusView?.text = when {
-            paused -> "Paused"
-            running -> "Running"
-            else -> Store.activeScript(this) ?: "No script"
+        if (System.currentTimeMillis() >= statusFlashUntil) {
+            statusView?.text = when {
+                paused -> "Paused"
+                running -> "Running"
+                else -> Store.activeScript(this) ?: "No script"
+            }
         }
         val stateColor = when {
             paused -> Palette.WARN
