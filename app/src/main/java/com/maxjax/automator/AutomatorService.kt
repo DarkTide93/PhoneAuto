@@ -9,7 +9,7 @@ import android.graphics.Color
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
-import android.graphics.drawable.GradientDrawable
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +23,7 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -50,9 +51,12 @@ class AutomatorService : AccessibilityService() {
     private var bubble: View? = null
     private var bubbleParams: WindowManager.LayoutParams? = null
     private var statusView: TextView? = null
-    private var pauseBtn: TextView? = null
-    private var stopBtn: TextView? = null
+    private var statusDot: View? = null
+    private var playBtn: ImageView? = null
+    private var pauseBtn: ImageView? = null
+    private var stopBtn: ImageView? = null
     private var replyPanel: View? = null
+    private var confirmPanel: View? = null
 
     private var dragStartX = 0
     private var dragStartY = 0
@@ -461,7 +465,7 @@ class AutomatorService : AccessibilityService() {
         }
     }
 
-    // ---------------------------------------------------------------- overlay
+    // ---------------------------------------------------------------- control bar
 
     private fun overlayParams(): WindowManager.LayoutParams {
         val p = WindowManager.LayoutParams(
@@ -475,57 +479,76 @@ class AutomatorService : AccessibilityService() {
         return p
     }
 
-    private fun bubbleButton(label: String, onClick: () -> Unit): TextView {
-        val tv = TextView(this)
-        tv.text = label
-        tv.textSize = 20f
-        tv.setTextColor(Color.WHITE)
-        tv.gravity = Gravity.CENTER
-        tv.setPadding(dp(9), dp(6), dp(9), dp(6))
-        tv.setOnClickListener { onClick() }
-        return tv
+    private fun barIcon(icon: Icon, tint: Int, onClick: (() -> Unit)?): ImageView {
+        val v = ImageView(this)
+        v.setImageDrawable(IconDrawable(icon, tint))
+        val pad = dp(9)
+        v.setPadding(pad, pad, pad, pad)
+        v.scaleType = ImageView.ScaleType.FIT_CENTER
+        if (onClick != null) {
+            v.background = circleRipple()
+            v.isClickable = true
+            v.setOnClickListener { onClick() }
+        }
+        return v
     }
+
+    private fun iconOf(v: ImageView): IconDrawable? = v.drawable as? IconDrawable
 
     private fun showBubble() {
         if (bubble != null) return
+
         val bar = LinearLayout(this)
         bar.orientation = LinearLayout.HORIZONTAL
         bar.gravity = Gravity.CENTER_VERTICAL
-        val bg = GradientDrawable()
-        bg.setColor(0xE6202124L.toInt())
-        bg.cornerRadius = dp(22).toFloat()
-        bar.background = bg
-        bar.setPadding(dp(4), dp(2), dp(8), dp(2))
+        bar.background = roundedRect(Palette.BAR, dpf(24f), Palette.STROKE, dp(1))
+        bar.setPadding(dp(6), dp(5), dp(10), dp(5))
+        bar.elevation = dpf(8f)
 
-        val handle = bubbleButton("⠿") {}
-        val play = bubbleButton("▶") { runActiveFromBubble() }
-        val pause = bubbleButton("⏸") { togglePause() }
-        val stop = bubbleButton("■") { stopScript() }
-        val chat = bubbleButton("💬") { toggleReplyPanel() }
-        val look = bubbleButton("🔍") {
-            closeReplyPanel()
+        val size = dp(38)
+        val handle = barIcon(Icon.GRIP, Palette.TEXT_FAINT, null)
+        val play = barIcon(Icon.PLAY, Palette.OK) { runActiveFromBubble() }
+        val pause = barIcon(Icon.PAUSE, Palette.TEXT) { togglePause() }
+        val stop = barIcon(Icon.STOP, Palette.TEXT) { stopScript() }
+        val chat = barIcon(Icon.CHAT, Palette.TEXT) { toggleReplyPanel() }
+        val look = barIcon(Icon.SEARCH, Palette.TEXT) {
+            closePanels()
             dumpScreen()
             toast("Screen written to Logs")
         }
+        val close = barIcon(Icon.CLOSE, Palette.DANGER) { askShutdown() }
+
+        val dot = View(this)
+        dot.background = circle(Palette.TEXT_FAINT)
+
         val status = TextView(this)
         status.textSize = 11f
-        status.setTextColor(0xFFB0B0B0L.toInt())
-        status.maxWidth = dp(110)
+        status.setTextColor(Palette.TEXT_DIM)
+        status.maxWidth = dp(96)
         status.maxLines = 1
         status.ellipsize = TextUtils.TruncateAt.END
-        status.setPadding(dp(4), 0, 0, 0)
 
-        bar.addView(handle)
-        bar.addView(play)
-        bar.addView(pause)
-        bar.addView(stop)
-        bar.addView(chat)
-        bar.addView(look)
-        bar.addView(status)
+        val divider = View(this)
+        divider.setBackgroundColor(Palette.STROKE)
+
+        bar.addView(handle, LinearLayout.LayoutParams(dp(28), size))
+        bar.addView(play, LinearLayout.LayoutParams(size, size))
+        bar.addView(pause, LinearLayout.LayoutParams(size, size))
+        bar.addView(stop, LinearLayout.LayoutParams(size, size))
+        bar.addView(chat, LinearLayout.LayoutParams(size, size))
+        bar.addView(look, LinearLayout.LayoutParams(size, size))
+        bar.addView(divider, LinearLayout.LayoutParams(dp(1), dp(20)).also {
+            it.leftMargin = dp(4); it.rightMargin = dp(4)
+        })
+        bar.addView(close, LinearLayout.LayoutParams(size, size))
+        bar.addView(dot, LinearLayout.LayoutParams(dp(6), dp(6)).also { it.leftMargin = dp(6) })
+        bar.addView(status, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).also { it.leftMargin = dp(5) })
 
         val p = overlayParams()
-        p.x = dp(8)
-        p.y = dp(200)
+        p.x = dp(10)
+        p.y = dp(180)
 
         handle.setOnTouchListener { _, e ->
             when (e.actionMasked) {
@@ -538,15 +561,16 @@ class AutomatorService : AccessibilityService() {
                 MotionEvent.ACTION_MOVE -> {
                     val (sw, sh) = screenSize()
                     // Keep a grab-able strip on screen; FLAG_LAYOUT_NO_LIMITS would
-                    // otherwise let the bubble be dragged away for good.
-                    val w = if (bar.width > 0) bar.width else dp(240)
-                    val h = if (bar.height > 0) bar.height else dp(44)
+                    // otherwise let the bar be dragged away for good.
+                    val w = if (bar.width > 0) bar.width else dp(300)
+                    val h = if (bar.height > 0) bar.height else dp(48)
                     val keep = dp(56)
                     val minX = minOf(keep - w, 0)
                     val maxX = maxOf(sw - keep, minX)
                     val maxY = maxOf(sh - h, 0)
                     p.x = (dragStartX + (e.rawX - touchStartX).toInt()).coerceIn(minX, maxX)
                     p.y = (dragStartY + (e.rawY - touchStartY).toInt()).coerceIn(0, maxY)
+                    closePanels()
                     try {
                         wm.updateViewLayout(bar, p)
                     } catch (ex: Exception) {
@@ -560,12 +584,14 @@ class AutomatorService : AccessibilityService() {
         try {
             wm.addView(bar, p)
         } catch (e: Exception) {
-            AppLog.i("Couldn't show bubble: ${e.message}")
+            AppLog.i("Couldn't show the control bar: ${e.message}")
             return
         }
         bubble = bar
         bubbleParams = p
         statusView = status
+        statusDot = dot
+        playBtn = play
         pauseBtn = pause
         stopBtn = stop
         updateBubble()
@@ -573,14 +599,27 @@ class AutomatorService : AccessibilityService() {
 
     private fun updateBubble() {
         val r = runner
+        val paused = running && r != null && r.paused
         statusView?.text = when {
-            running && r != null && r.paused -> "paused"
-            running -> "running"
-            else -> Store.activeScript(this) ?: "no active script"
+            paused -> "Paused"
+            running -> "Running"
+            else -> Store.activeScript(this) ?: "No script"
         }
-        val a = if (running) 1f else 0.35f
-        pauseBtn?.alpha = a
-        stopBtn?.alpha = a
+        val stateColor = when {
+            paused -> Palette.WARN
+            running -> Palette.OK
+            else -> Palette.TEXT_FAINT
+        }
+        statusDot?.background = circle(stateColor)
+
+        // Play is the live control when idle; pause and stop are live during a run.
+        playBtn?.alpha = if (running) 0.3f else 1f
+        playBtn?.isClickable = !running
+        pauseBtn?.alpha = if (running) 1f else 0.3f
+        pauseBtn?.isClickable = running
+        stopBtn?.alpha = if (running) 1f else 0.3f
+        stopBtn?.isClickable = running
+        pauseBtn?.let { iconOf(it)?.setIconColor(if (paused) Palette.WARN else Palette.TEXT) }
     }
 
     private fun runActiveFromBubble() {
@@ -589,89 +628,182 @@ class AutomatorService : AccessibilityService() {
             toast("Open a script in the app and tap Set active")
             return
         }
-        closeReplyPanel()
+        closePanels()
         runScript(name, 400)
     }
 
-    private fun closeReplyPanel() {
-        val panel = replyPanel ?: return
-        try {
-            wm.removeView(panel)
-        } catch (e: Exception) {
-            // already gone
+    // ---------------------------------------------------------------- panels
+
+    private fun panelParams(width: Int): WindowManager.LayoutParams {
+        val bp = bubbleParams
+        val p = overlayParams()
+        p.width = width
+        p.x = bp?.x ?: dp(10)
+        p.y = (bp?.y ?: dp(180)) + dp(56)
+        return p
+    }
+
+    private fun panelShell(): LinearLayout {
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.background = roundedRect(Palette.BAR, dpf(18f), Palette.STROKE, dp(1))
+        box.elevation = dpf(10f)
+        return box
+    }
+
+    private fun closePanels() {
+        for (panel in listOf(replyPanel, confirmPanel)) {
+            if (panel == null) continue
+            try {
+                wm.removeView(panel)
+            } catch (e: Exception) {
+                // already gone
+            }
         }
         replyPanel = null
+        confirmPanel = null
+    }
+
+    /** Turning the service off means a trip to Settings to undo, so it asks first. */
+    private fun askShutdown() {
+        if (confirmPanel != null) {
+            closePanels()
+            return
+        }
+        closePanels()
+
+        val box = panelShell()
+        box.setPadding(dp(16), dp(14), dp(16), dp(14))
+
+        val title = TextView(this)
+        title.text = "Turn off Phone Automator?"
+        title.textSize = 15f
+        title.setTypeface(Typeface.DEFAULT_BOLD)
+        title.setTextColor(Palette.TEXT)
+        box.addView(title)
+
+        val note = TextView(this)
+        note.text = "The bar disappears and scripts stop. Turn it back on in Accessibility settings."
+        note.textSize = 12f
+        note.setTextColor(Palette.TEXT_DIM)
+        note.setLineSpacing(dpf(2f), 1f)
+        box.addView(note, matchWrap(dp(8)))
+
+        box.addView(
+            uiButtonRow(
+                uiSecondaryButton("Cancel") { closePanels() },
+                uiPrimaryButton("Turn off") { shutdownService() }
+            ),
+            matchWrap(dp(14))
+        )
+
+        try {
+            wm.addView(box, panelParams(dp(270)))
+            confirmPanel = box
+        } catch (e: Exception) {
+            AppLog.i("Couldn't show the confirmation: ${e.message}")
+        }
+    }
+
+    private fun shutdownService() {
+        closePanels()
+        stopScript()
+        AppLog.i("Turned off from the control bar")
+        removeOverlays()
+        try {
+            disableSelf()
+        } catch (e: Exception) {
+            AppLog.i("Couldn't turn the service off: ${e.message}")
+            toast("Turn it off in Accessibility settings")
+        }
     }
 
     private fun toggleReplyPanel() {
         if (replyPanel != null) {
-            closeReplyPanel()
+            closePanels()
             return
         }
+        closePanels()
         val replies = Store.parseReplies(Store.loadRepliesRaw(this))
 
-        val list = LinearLayout(this)
-        list.orientation = LinearLayout.VERTICAL
-        list.setPadding(dp(8), dp(6), dp(8), dp(8))
+        val list = panelShell()
+        list.setPadding(dp(10), dp(12), dp(10), dp(12))
 
-        val header = TextView(this)
-        header.text = "Quick replies            ✕"
-        header.textSize = 14f
-        header.setTextColor(Color.WHITE)
-        header.setPadding(dp(8), dp(6), dp(8), dp(10))
-        header.setOnClickListener { closeReplyPanel() }
-        list.addView(header)
+        val header = LinearLayout(this)
+        header.orientation = LinearLayout.HORIZONTAL
+        header.gravity = Gravity.CENTER_VERTICAL
+        header.setPadding(dp(6), 0, 0, dp(8))
+        val title = TextView(this)
+        title.text = "Quick replies"
+        title.textSize = 13f
+        title.setTypeface(Typeface.DEFAULT_BOLD)
+        title.setTextColor(Palette.TEXT)
+        header.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(barIcon(Icon.CLOSE, Palette.TEXT_FAINT) { closePanels() },
+            LinearLayout.LayoutParams(dp(28), dp(28)))
+        list.addView(header, matchWrap())
 
         if (replies.isEmpty()) {
             val empty = TextView(this)
             empty.text = "No replies yet. Add them in the app."
-            empty.setTextColor(0xFFB0B0B0L.toInt())
-            empty.setPadding(dp(8), dp(4), dp(8), dp(8))
+            empty.textSize = 12f
+            empty.setTextColor(Palette.TEXT_FAINT)
+            empty.setPadding(dp(6), dp(4), dp(6), dp(4))
             list.addView(empty)
         }
 
-        for ((title, body) in replies) {
-            val item = TextView(this)
-            item.text = title + "\n" + body.replace('\n', ' ').take(40)
-            item.textSize = 14f
-            item.setTextColor(Color.WHITE)
-            item.setPadding(dp(8), dp(8), dp(8), dp(8))
-            val itemBg = GradientDrawable()
-            itemBg.setColor(0xFF303134L.toInt())
-            itemBg.cornerRadius = dp(8).toFloat()
-            item.background = itemBg
+        for ((name, body) in replies) {
+            val item = LinearLayout(this)
+            item.orientation = LinearLayout.VERTICAL
+            item.setPadding(dp(11), dp(9), dp(11), dp(9))
+            item.background = rectRipple(Palette.SURFACE_HI, dpf(10f))
+            item.isClickable = true
+
+            val n = TextView(this)
+            n.text = name
+            n.textSize = 13f
+            n.setTypeface(Typeface.DEFAULT_BOLD)
+            n.setTextColor(Palette.TEXT)
+            item.addView(n)
+
+            val preview = TextView(this)
+            preview.text = body.replace('\n', ' ')
+            preview.textSize = 11f
+            preview.setTextColor(Palette.TEXT_FAINT)
+            preview.maxLines = 1
+            preview.ellipsize = TextUtils.TruncateAt.END
+            item.addView(preview, matchWrap(dp(2)))
+
             item.setOnClickListener {
-                if (insertText(body, true)) AppLog.i("Inserted reply '$title'") else toast("Tap into a text box first")
+                if (insertText(body, true)) {
+                    AppLog.i("Inserted reply '$name'")
+                    closePanels()
+                } else {
+                    toast("Tap into a text box first")
+                }
             }
-            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            lp.topMargin = dp(6)
-            list.addView(item, lp)
+            list.addView(item, matchWrap(dp(6)))
         }
 
-        val scroll = ScrollView(this)
-        scroll.addView(list)
-        val bg = GradientDrawable()
-        bg.setColor(0xF0202124L.toInt())
-        bg.cornerRadius = dp(14).toFloat()
-        scroll.background = bg
+        val content: View = if (replies.size > 5) {
+            val sv = ScrollView(this)
+            sv.addView(list)
+            sv
+        } else list
 
-        val bp = bubbleParams
-        val p = overlayParams()
-        p.width = dp(250)
-        p.height = if (replies.size > 5) dp(340) else WindowManager.LayoutParams.WRAP_CONTENT
-        p.x = bp?.x ?: dp(8)
-        p.y = (bp?.y ?: dp(200)) + dp(52)
+        val p = panelParams(dp(260))
+        if (replies.size > 5) p.height = dp(340)
 
         try {
-            wm.addView(scroll, p)
-            replyPanel = scroll
+            wm.addView(content, p)
+            replyPanel = content
         } catch (e: Exception) {
-            AppLog.i("Couldn't show reply panel: ${e.message}")
+            AppLog.i("Couldn't show the replies panel: ${e.message}")
         }
     }
 
     private fun removeOverlays() {
-        closeReplyPanel()
+        closePanels()
         val b = bubble ?: return
         try {
             wm.removeView(b)
@@ -680,6 +812,8 @@ class AutomatorService : AccessibilityService() {
         }
         bubble = null
         statusView = null
+        statusDot = null
+        playBtn = null
         pauseBtn = null
         stopBtn = null
     }

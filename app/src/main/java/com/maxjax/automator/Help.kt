@@ -81,19 +81,23 @@ a tap that is found but refused — add `gesture` to
 the end of that line to touch it for real instead.
 Use if / waitfor for things that might not show.
 
-BUBBLE
-⠿ drag   ▶ run active   ⏸ pause/resume   ■ stop
-💬 quick replies
-🔍 write what's on screen to Logs
+THE CONTROL BAR
+grip    drag the bar anywhere
+play    run the active script
+pause   pause and resume a run
+stop    stop the run
+speech  quick replies
+search  write what's on screen to Logs
+X       turn Phone Automator off completely
 Your own app's screens are ignored by scripts.
 
 FINDING TARGETS
-Open the app you want to automate, tap 🔍 on the
-bubble, then open Logs and tap Copy. Each line
-shows the text, description, id and position of
-one thing on screen — pick your selectors from it.
-Nodes are listed top to bottom, so `index 1` is
-always the second one down.
+Open the app you want to automate, tap the search
+icon on the bar, then open Logs and tap Copy. Each
+line shows the text, description, id and position
+of one thing on screen — pick your selectors from
+it. Nodes are listed top to bottom, so `index 1`
+is always the second one down.
 """.trim()
 }
 
@@ -102,8 +106,10 @@ fun Activity.showHelp() {
     tv.text = Help.TEXT
     tv.typeface = Typeface.MONOSPACE
     tv.textSize = 12f
+    tv.setTextColor(Palette.TEXT_DIM)
     tv.setTextIsSelectable(true)
-    tv.setPadding(dp(16), dp(12), dp(16), dp(12))
+    tv.setLineSpacing(dpf(2f), 1f)
+    tv.setPadding(dp(20), dp(14), dp(20), dp(14))
     val h = HorizontalScrollView(this)
     h.addView(tv)
     val v = ScrollView(this)

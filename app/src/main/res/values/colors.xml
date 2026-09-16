@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_bg">#1F6FEB</color>
+    <color name="bg">#0D0F12</color>
+    <color name="surface">#15181D</color>
+    <color name="text_primary">#EDF0F4</color>
+    <color name="text_secondary">#98A2B0</color>
+    <color name="accent">#3B82F6</color>
+    <color name="ic_bg">#3B82F6</color>
 </resources>
