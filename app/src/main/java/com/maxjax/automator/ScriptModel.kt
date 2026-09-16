@@ -15,7 +15,7 @@ sealed class TapTarget {
 
 sealed class Stmt(val line: Int) {
     class Wait(line: Int, val minMs: Long, val maxMs: Long) : Stmt(line)
-    class Tap(line: Int, val target: TapTarget, val long: Boolean, val forceGesture: Boolean) : Stmt(line)
+    class Tap(line: Int, val target: TapTarget, val long: Boolean, val forceGesture: Boolean, val double: Boolean) : Stmt(line)
     class SwipeDir(line: Int, val dir: String, val ms: Long) : Stmt(line)
     class SwipeXY(line: Int, val x1: Coord, val y1: Coord, val x2: Coord, val y2: Coord, val ms: Long) : Stmt(line)
     class ScrollUntil(line: Int, val sel: Selector, val max: Int, val dir: String) : Stmt(line)

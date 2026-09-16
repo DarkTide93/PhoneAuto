@@ -180,7 +180,8 @@ class Runner(
         when (val t = s.target) {
             is TapTarget.Point -> {
                 val (x, y) = svc.resolve(t.x, t.y)
-                if (!svc.tapAt(x, y, s.long)) {
+                val hit = if (s.double) svc.doubleTapAt(x, y) else svc.tapAt(x, y, s.long)
+                if (!hit) {
                     fail(s, "the tap at ${x.toInt()},${y.toInt()} was refused (screen off, or something else took the touch)")
                 }
                 AppLog.i("tap ${x.toInt()},${y.toInt()}")
@@ -195,7 +196,8 @@ class Runner(
                 }
                 val label = t.sel.describe() + (if (t.index > 0) " index ${t.index}" else "")
                 if (node == null) fail(s, "nothing to tap for $label")
-                if (!svc.tapNode(node, s.long, s.forceGesture)) {
+                val hit = if (s.double) svc.doubleTapNode(node) else svc.tapNode(node, s.long, s.forceGesture)
+                if (!hit) {
                     fail(s, "found $label but the tap didn't go through — try adding 'gesture' at the end of the line")
                 }
                 AppLog.i("tap $label")

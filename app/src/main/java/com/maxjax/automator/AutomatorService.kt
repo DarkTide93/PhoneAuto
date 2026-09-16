@@ -218,14 +218,47 @@ class AutomatorService : AccessibilityService() {
      * delivered on the main thread, so calling this from the main thread would deadlock.
      */
     private fun gesture(path: Path, durationMs: Long): Boolean {
+        val d = durationMs.coerceIn(1L, GestureDescription.getMaxGestureDuration())
+        return dispatch(
+            GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0L, d))
+                .build(),
+            d + 3000L
+        )
+    }
+
+    /**
+     * Two taps in one gesture, 130ms apart. Two separate `tap` statements land 200-300ms apart,
+     * which straddles the double-tap window, so apps register them as two single taps.
+     */
+    fun doubleTapAt(x: Float, y: Float): Boolean {
+        val (w, h) = screenSize()
+        val cx = x.coerceIn(0f, (w - 1).toFloat())
+        val cy = y.coerceIn(0f, (h - 1).toFloat())
+        val first = Path()
+        first.moveTo(cx, cy)
+        val second = Path()
+        second.moveTo(cx, cy)
+        return dispatch(
+            GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(first, 0L, 40L))
+                .addStroke(GestureDescription.StrokeDescription(second, 130L, 40L))
+                .build(),
+            3200L
+        )
+    }
+
+    fun doubleTapNode(n: AccessibilityNodeInfo): Boolean {
+        val r = bounds(n)
+        if (r.isEmpty) return false
+        return doubleTapAt(r.exactCenterX(), r.exactCenterY())
+    }
+
+    private fun dispatch(g: GestureDescription, timeoutMs: Long): Boolean {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             AppLog.i("✖ internal: gesture requested on the main thread, ignored")
             return false
         }
-        val d = durationMs.coerceIn(1L, GestureDescription.getMaxGestureDuration())
-        val g = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0L, d))
-            .build()
         val latch = CountDownLatch(1)
         val ok = AtomicBoolean(false)
         main.post {
@@ -246,7 +279,7 @@ class AutomatorService : AccessibilityService() {
             }
             if (!sent) latch.countDown()
         }
-        latch.await(d + 3000L, TimeUnit.MILLISECONDS)
+        latch.await(timeoutMs, TimeUnit.MILLISECONDS)
         return ok.get()
     }
 

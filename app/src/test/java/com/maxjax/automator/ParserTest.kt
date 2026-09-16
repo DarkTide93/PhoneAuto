@@ -230,6 +230,21 @@ class ParserTest {
     }
 
     @Test
+    fun `doubletap parses and is marked as a double`() {
+        val t = parse("doubletap 50% 45%").body[0] as Stmt.Tap
+        assertTrue(t.double)
+        assertTrue(!t.long)
+        val n = parse("doubletap text \"Heart\"").body[0] as Stmt.Tap
+        assertTrue(n.double)
+    }
+
+    @Test
+    fun `a plain tap is not a double`() {
+        assertTrue(!(parse("tap 50% 45%").body[0] as Stmt.Tap).double)
+        assertTrue(!(parse("longpress text \"X\"").body[0] as Stmt.Tap).double)
+    }
+
+    @Test
     fun `a bare quoted target means text`() {
         val tap = parse("tap \"Save\"").body[0] as Stmt.Tap
         assertEquals(SelKind.TEXT, (tap.target as TapTarget.Node).sel.kind)

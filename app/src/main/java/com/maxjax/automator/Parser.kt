@@ -125,7 +125,7 @@ object Parser {
                 Stmt.Wait(no, lo, hi)
             }
 
-            "tap", "longpress" -> {
+            "tap", "longpress", "doubletap" -> {
                 val (target, next) = parseTarget(no, t, 1)
                 var force = false
                 var i = next
@@ -137,7 +137,7 @@ object Parser {
                         unexpected(i)
                     }
                 }
-                Stmt.Tap(no, target, kw == "longpress", force)
+                Stmt.Tap(no, target, kw == "longpress", force, kw == "doubletap")
             }
 
             "swipe" -> {

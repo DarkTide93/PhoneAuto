@@ -36,6 +36,7 @@ tap text "OK"           tap it (waits up to 2s to appear)
 tap text "OK" index 1   tap the 2nd match (starts at 0)
 tap 50% 80%             tap a screen position
 longpress text "Photo"  long-press, same options as tap
+doubletap 50% 45%       real double tap (e.g. like a video)
 tap text "OK" gesture   force a real touch, not a click
 swipe up                finger moves up (list scrolls down)
 swipe down|left|right [duration]
