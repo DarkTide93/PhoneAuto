@@ -77,14 +77,24 @@ class MainActivity : Activity() {
         val message = when {
             connected -> "The control bar is on screen. Drag it by the grip on the left; " +
                 "the ✕ on the right turns everything off."
-            enabled -> "Turned on, waiting for Android to start the service. If the bar doesn't " +
-                "appear in a few seconds, switch it off and on again."
+            enabled -> "Android lists the service as on but hasn't started it. After a reinstall " +
+                "this usually means the permission is restricted: open App info below, allow " +
+                "restricted settings, then switch it off and on again."
             else -> "Phone Automator needs the accessibility permission to read the screen and " +
                 "perform taps. Nothing leaves your phone."
         }
         pad.addView(uiBody(message), matchWrap(dp(12)))
 
-        if (!enabled) {
+        // Both routes stay available in every state. Keying these off "enabled" once left the
+        // app with no way into Settings when Android listed the service but refused to start it.
+        if (connected) {
+            pad.addView(
+                uiQuietButton("Accessibility settings") {
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                matchWrap(dp(16))
+            )
+        } else {
             pad.addView(
                 uiPrimaryButton("Open Accessibility settings") {
                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
