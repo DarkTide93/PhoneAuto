@@ -1,0 +1,64 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew assembleDebug -PbuildNumber=${{ github.run_number }} --stacktrace --no-daemon
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk PhoneAutomator-${{ github.run_number }}.apk
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: PhoneAutomator-${{ github.run_number }}-apk
+          path: PhoneAutomator-${{ github.run_number }}.apk
+          if-no-files-found: warn
+
+      - name: Publish release (direct APK download)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          body: |
+            Branch: `${{ github.ref_name }}`
+            Commit: ${{ github.sha }}
+
+            Download `PhoneAutomator-${{ github.run_number }}.apk` below and open it on your phone to install.
+          files: PhoneAutomator-${{ github.run_number }}.apk
+
+      # Runs last on purpose: a regression here should turn the run red, but you
+      # still get an installable APK above to compare against.
+      - name: Parser tests
+        run: ./gradlew testDebugUnitTest -PbuildNumber=${{ github.run_number }} --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-report-${{ github.run_number }}
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
