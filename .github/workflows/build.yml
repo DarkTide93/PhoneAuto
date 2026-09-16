@@ -22,7 +22,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Pin the packages explicitly: the action's default list includes the legacy
+      # 'tools' package, which Google removed from the SDK repository, so sdkmanager
+      # exits 1 before anything is installed.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - uses: gradle/actions/setup-gradle@v4
 
