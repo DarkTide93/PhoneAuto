@@ -74,7 +74,10 @@ class Runner(
         }
 
         when (s) {
-            is Stmt.Wait -> sleepMs(s.ms)
+            is Stmt.Wait -> sleepMs(
+                if (s.maxMs > s.minMs) s.minMs + kotlin.random.Random.nextLong(s.maxMs - s.minMs + 1)
+                else s.minMs
+            )
 
             is Stmt.Tap -> tap(s)
 

@@ -13,6 +13,7 @@ BASICS
 One command per line. # starts a comment.
 Put text with spaces in "quotes".
 Durations: 500ms  2s  1.5s  1m  (bare number = ms)
+Random wait: wait 1s-3s  (picks a new value each time)
 Positions: pixels (540 1200) or percent (50% 80%)
 Indentation is optional.
 
@@ -48,6 +49,7 @@ reply "Thanks"          add a saved quick reply
 back  home  recents  notifications
 launch com.android.settings
 wait 2s
+wait 1s-3s              random pause, looks less robotic
 log "a message"
 dump                    write everything on screen to Logs
 stop

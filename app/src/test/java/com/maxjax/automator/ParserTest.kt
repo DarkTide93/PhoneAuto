@@ -190,11 +190,34 @@ class ParserTest {
 
     @Test
     fun `durations convert to milliseconds`() {
-        assertEquals(2000L, (parse("wait 2s").body[0] as Stmt.Wait).ms)
-        assertEquals(1500L, (parse("wait 1.5s").body[0] as Stmt.Wait).ms)
-        assertEquals(60_000L, (parse("wait 1m").body[0] as Stmt.Wait).ms)
-        assertEquals(250L, (parse("wait 250").body[0] as Stmt.Wait).ms)
+        assertEquals(2000L, (parse("wait 2s").body[0] as Stmt.Wait).minMs)
+        assertEquals(1500L, (parse("wait 1.5s").body[0] as Stmt.Wait).minMs)
+        assertEquals(60_000L, (parse("wait 1m").body[0] as Stmt.Wait).minMs)
+        assertEquals(250L, (parse("wait 250").body[0] as Stmt.Wait).minMs)
     }
+
+    @Test
+    fun `a plain wait has an empty range`() {
+        val w = parse("wait 2s").body[0] as Stmt.Wait
+        assertEquals(w.minMs, w.maxMs)
+    }
+
+    @Test
+    fun `a random wait keeps both ends`() {
+        val w = parse("wait 1s-3s").body[0] as Stmt.Wait
+        assertEquals(1000L, w.minMs)
+        assertEquals(3000L, w.maxMs)
+    }
+
+    @Test
+    fun `a random wait may mix units`() {
+        val w = parse("wait 750ms-2s").body[0] as Stmt.Wait
+        assertEquals(750L, w.minMs)
+        assertEquals(2000L, w.maxMs)
+    }
+
+    @Test fun `a backwards range is rejected`() = expectError("wait 3s-1s", 1)
+    @Test fun `a range with a bad end is rejected`() = expectError("wait 1s-zz", 1)
 
     @Test
     fun `a quoted keyword is text, not a keyword`() {

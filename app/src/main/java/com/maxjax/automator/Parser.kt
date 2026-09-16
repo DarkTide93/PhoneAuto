@@ -120,7 +120,10 @@ object Parser {
         fun word(i: Int, w: String): Boolean = t.getOrNull(i)?.let { !it.quoted && it.s.equals(w, ignoreCase = true) } ?: false
 
         return when (kw) {
-            "wait" -> Stmt.Wait(no, dur(no, need(1).s))
+            "wait" -> {
+                val (lo, hi) = durRange(no, need(1).s)
+                Stmt.Wait(no, lo, hi)
+            }
 
             "tap", "longpress" -> {
                 val (target, next) = parseTarget(no, t, 1)
@@ -304,6 +307,19 @@ object Parser {
         val v = s?.toIntOrNull()
         if (v == null || v < 0) throw ParseException(no, "expected a whole number but found '${s ?: "nothing"}'")
         return v
+    }
+
+    /** "2s" is a fixed wait; "1s-3s" is a random wait between the two. */
+    private fun durRange(no: Int, s: String): Pair<Long, Long> {
+        val dash = s.indexOf('-')
+        if (dash <= 0) {
+            val d = dur(no, s)
+            return Pair(d, d)
+        }
+        val lo = dur(no, s.substring(0, dash))
+        val hi = dur(no, s.substring(dash + 1))
+        if (hi < lo) throw ParseException(no, "'$s' counts backwards - put the shorter time first")
+        return Pair(lo, hi)
     }
 
     private fun dur(no: Int, s: String): Long {
